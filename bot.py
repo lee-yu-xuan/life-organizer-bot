@@ -70,44 +70,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await update.message.reply_text(f"⏳ Processing {platform.title()} link...")
 
     try:
-        data = scrape_url(url)
-        if not data:
-            await status_msg.edit_text("❌ Failed to scrape the link. It might be private or unavailable.")
-            return
-
-        caption = data.get("caption", "")
-        hashtags = data.get("hashtags", [])
-
-        result = process_link(caption, hashtags, url, platform)
+        result = process_link(None, [], url, platform)
         category = result.get("category", "food")
         post_text = result.get("post_text", "")
         info = result.get("info", {})
 
-        title = data.get("title") or data.get("username") or ""
-        location_name = data.get("location_name") or (info.get("locations", [None])[0] if info.get("locations") else None)
-        latitude = data.get("location_lat")
-        longitude = data.get("location_lon")
-
-        if not latitude and location_name:
-            latitude, longitude = geocode_location(location_name)
-
-        tags = info.get("tags", [])
-        if hashtags:
-            tags = list(set(tags + [h.lower() for h in hashtags]))
-
+        # Save to database
         save_place(
             category=category,
             platform=platform,
             url=url,
-            title=title,
-            location=location_name,
-            latitude=latitude,
-            longitude=longitude,
+            title=info.get("name", ""),
+            location=info.get("address"),
+            latitude=None,
+            longitude=None,
             subcategory=info.get("subcategory"),
             price_range=info.get("price"),
-            tags=json.dumps(tags) if tags else None,
-            description=caption[:500] if caption else None,
-            hashtags=json.dumps(hashtags) if hashtags else None,
+            tags=None,
+            description=post_text[:500],
+            hashtags=None,
         )
 
         topic_id = TOPICS.get(category)
