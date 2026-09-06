@@ -7,7 +7,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from config import BOT_TOKEN, CHANNEL_ID, TOPICS
 from database import init_db, save_place, search_places, get_places_by_category, get_all_places
 from scraper import scrape_url, detect_platform, INSTAGRAM_PATTERN, TIKTOK_PATTERN, YOUTUBE_PATTERN
-from processor import process_link
+import subprocess
 from geocoder import geocode_location, format_maps_url, format_maps_link_text
 
 logging.basicConfig(level=logging.INFO)
@@ -70,22 +70,56 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await update.message.reply_text(f"⏳ Processing {platform.title()} link...")
 
     try:
-        result = process_link(None, [], url, platform)
-        category = result.get("category", "food")
-        post_text = result.get("post_text", "")
-        info = result.get("info", {})
+        # Call OpenCode agent directly with the URL
+        result = subprocess.run(
+            ["opencode", "run", "--agent", "tiktok-processor", "--model", "opencode/big-pickle", f"Process this TikTok link: {url}"],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        
+        if result.returncode != 0:
+            await status_msg.edit_text("❌ Failed to process link.")
+            return
+        
+        post_text = result.stdout.strip()
+        
+        # Extract just the formatted message
+        import re
+        code_match = re.search(r'```\w*\n(.*?)```', post_text, re.DOTALL)
+        if code_match:
+            post_text = code_match.group(1).strip()
+        else:
+            lines = post_text.split('\n')
+            formatted_lines = []
+            in_message = False
+            for line in lines:
+                if any(line.startswith(e) for e in ['🍔', '💒', '💕', '🏠']):
+                    in_message = True
+                if in_message:
+                    formatted_lines.append(line)
+            post_text = '\n'.join(formatted_lines) if formatted_lines else post_text
+
+        # Determine category
+        category = "food"
+        if "💒" in post_text:
+            category = "wedding"
+        elif "💕" in post_text:
+            category = "dates"
+        elif "🏠" in post_text:
+            category = "renovation"
 
         # Save to database
         save_place(
             category=category,
             platform=platform,
             url=url,
-            title=info.get("name", ""),
-            location=info.get("address"),
+            title="",
+            location=None,
             latitude=None,
             longitude=None,
-            subcategory=info.get("subcategory"),
-            price_range=info.get("price"),
+            subcategory=None,
+            price_range=None,
             tags=None,
             description=post_text[:500],
             hashtags=None,
