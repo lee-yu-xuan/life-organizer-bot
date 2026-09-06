@@ -7,7 +7,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from config import BOT_TOKEN, CHANNEL_ID, TOPICS
 from database import init_db, save_place, search_places, get_places_by_category, get_all_places
 from scraper import scrape_url, detect_platform, INSTAGRAM_PATTERN, TIKTOK_PATTERN, YOUTUBE_PATTERN
-from extractor import extract_food_info, extract_date_info, extract_wedding_info, extract_renovation_info
+from extractor import extract_food_info, extract_date_info, extract_wedding_info, extract_renovation_info, format_food_message
 from categorizer import categorize
 from geocoder import geocode_location, format_maps_url, format_maps_link_text
 
@@ -79,6 +79,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if category == "food":
             info = extract_food_info(caption, hashtags)
+            post_text = format_food_message(info, url, platform)
         elif category == "dates":
             info = extract_date_info(caption, hashtags)
         elif category == "wedding":
@@ -119,33 +120,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         emoji = CATEGORY_EMOJIS.get(category, "📌")
         cat_name = CATEGORY_NAMES.get(category, "Unknown")
 
-        post_text = f"{emoji} *{cat_name}*\n\n"
+        if category != "food":
+            post_text = f"{emoji} *{cat_name}*\n\n"
 
-        if title:
-            post_text += f"*{title}*\n"
+            if title:
+                post_text += f"*{title}*\n"
 
-        if location_name:
-            post_text += f"📍 {location_name}\n"
+            if location_name:
+                post_text += f"📍 {location_name}\n"
 
-        if info.get("subcategory"):
-            post_text += f"🏷️ {info['subcategory'].title()}\n"
+            if info.get("subcategory"):
+                post_text += f"🏷️ {info['subcategory'].title()}\n"
 
-        if info.get("price"):
-            post_text += f"💰 {info['price']}\n"
+            if info.get("price"):
+                post_text += f"💰 {info['price']}\n"
 
-        post_text += f"\n🔗 [View on {platform.title()}]({url})\n"
+            post_text += f"\n🔗 [View on {platform.title()}]({url})\n"
 
-        if latitude and longitude:
-            maps_url = format_maps_url(latitude, longitude, title)
-            post_text += f"🗺️ [Open in Google Maps]({maps_url})\n"
+            if latitude and longitude:
+                maps_url = format_maps_url(latitude, longitude, title)
+                post_text += f"🗺️ [Open in Google Maps]({maps_url})\n"
 
-        if caption:
-            short_caption = caption[:300] + ("..." if len(caption) > 300 else "")
-            post_text += f"\n📝 {short_caption}\n"
+            if caption:
+                short_caption = caption[:300] + ("..." if len(caption) > 300 else "")
+                post_text += f"\n📝 {short_caption}\n"
 
-        if tags:
-            tag_str = " ".join(f"#{t}" for t in tags[:10])
-            post_text += f"\n{tag_str}"
+            if tags:
+                tag_str = " ".join(f"#{t}" for t in tags[:10])
+                post_text += f"\n{tag_str}"
 
         bot = context.bot
         await bot.send_message(

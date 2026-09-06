@@ -1,6 +1,5 @@
 python-telegram-bot==22.8
 instaloader
 yt-dlp
-spacy
 geopy
 requests
