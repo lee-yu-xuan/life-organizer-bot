@@ -2,36 +2,28 @@ import json
 import os
 import logging
 import re
-import requests
+import subprocess
 
 logger = logging.getLogger(__name__)
 
-ZEN_API_URL = "https://opencode.ai/zen/v1/chat/completions"
-MODEL = "big-pickle"
 
-
-def _call_zen_api(prompt: str) -> str:
-    """Call OpenCode Zen API directly (no CLI needed)."""
-    headers = {
-        "Content-Type": "application/json",
-    }
-
-    payload = {
-        "model": MODEL,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 1000,
-    }
-
+def _call_opencode(prompt: str) -> str:
+    """Call OpenCode CLI headlessly."""
     try:
-        response = requests.post(ZEN_API_URL, json=payload, headers=headers, timeout=60)
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"].strip()
+        result = subprocess.run(
+            ["opencode", "run", prompt],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd="/home/yx"
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+        else:
+            logger.error(f"OpenCode error: {result.stderr}")
+            return ""
     except Exception as e:
-        logger.error(f"Zen API error: {e}")
+        logger.error(f"OpenCode subprocess error: {e}")
         return ""
 
 
@@ -127,10 +119,10 @@ Hashtags: {hashtag_text}
 Return this exact JSON format:
 {{"restaurant_name": "name or null", "city": "city or null", "cuisine": "cuisine type or null", "famous_dishes": ["dish1"], "price_range": "$$ or null", "address": "address or null"}}"""
 
-    response = _call_zen_api(prompt)
+    response = _call_opencode(prompt)
 
     if not response:
-        logger.warning("API failed, using regex fallback")
+        logger.warning("OpenCode failed, using regex fallback")
         return _regex_extract_food(caption, hashtags)
 
     data = _extract_json_from_text(response)
@@ -184,10 +176,10 @@ Format:
 
 #tags"""
 
-    response = _call_zen_api(prompt)
+    response = _call_opencode(prompt)
 
     if not response:
-        logger.warning("API formatting failed, using Python fallback")
+        logger.warning("OpenCode formatting failed, using Python fallback")
         return _fallback_format(extracted, url, platform)
 
     return response
