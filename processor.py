@@ -2,6 +2,7 @@ import json
 import re
 import subprocess
 import logging
+import urllib.parse
 
 logger = logging.getLogger(__name__)
 
@@ -65,78 +66,49 @@ Hashtags: {hashtag_text}"""
         category = _keyword_categorize(caption, hashtags)
 
     # Subagent: format based on category
-    info = _extract_info(caption, hashtags)
+    info = _extract_info(caption, hashtags, category)
     post_text = _format_message(category, info, url, platform)
 
     return {"category": category, "info": info, "post_text": post_text}
 
 
-def _extract_info(caption, hashtags):
-    """Extract info using regex."""
-    info = {"hashtags": hashtags}
+def _extract_info(caption, hashtags, category):
+    """Extract info using regex based on category."""
+    from extractor import _regex_extract_food, _regex_extract_date, _regex_extract_wedding, _regex_extract_renovation
 
-    # Address
-    addr = re.search(r'(\d+[\w\s,]+(?:Singapore|SG|KL|Kuala Lumpur|Malaysia))', caption, re.IGNORECASE)
-    if addr:
-        info["address"] = addr.group(1).strip()
-
-    # Price
-    price = re.search(r'(\${1,4})', caption)
-    if price:
-        info["price"] = price.group(1)
-
-    # Name
-    name = re.search(r'([A-Z][\w\s]+?)(?:\s+at\s+|\s*,)', caption)
-    if name:
-        info["name"] = name.group(1).strip()
-
-    # Cuisine (food only)
-    cuisines = ['Japanese', 'Chinese', 'Korean', 'Thai', 'Vietnamese', 'Italian', 'French', 'Indian', 'Mexican']
-    for c in cuisines:
-        if c.lower() in caption.lower():
-            info["cuisine"] = c
-            break
-
-    # Dishes (food only)
-    dishes = []
-    for d in ['ramen', 'sushi', 'tempura', 'udon', 'pizza', 'pasta', 'steak', 'burger']:
-        if d in caption.lower():
-            dishes.append(d.title())
-    info["dishes"] = dishes
-
-    # Description
-    info["description"] = caption[:200]
-
-    # Highlights
-    info["highlights"] = [w for w in caption.split() if len(w) > 3 and w.isalpha()][:5]
-
-    return info
+    if category == "food":
+        return _regex_extract_food(caption, hashtags)
+    elif category == "dates":
+        return _regex_extract_date(caption, hashtags)
+    elif category == "wedding":
+        return _regex_extract_wedding(caption, hashtags)
+    elif category == "renovation":
+        return _regex_extract_renovation(caption, hashtags)
+    return {"hashtags": hashtags}
 
 
 def _format_message(category, info, url, platform):
     """Format Telegram message based on category."""
-    name = info.get("name", "Unknown")
-    address = info.get("address", "Not provided")
-    price = info.get("price", "N/A")
-
     if category == "food":
+        name = info.get("restaurant_name", "Unknown Place")
+        address = info.get("address", "")
         cuisine = info.get("cuisine", "")
-        dishes = info.get("dishes", [])
+        dishes = info.get("famous_dishes", [])
+        price = info.get("price_range", "")
         hashtags = " ".join(f"#{h}" for h in info.get("hashtags", []))
 
         lines = ["🍔 Food Places\n"]
         lines.append(f"**{name}**\n")
-        if address != "Not provided":
+        if address:
             lines.append(f"📍 {address}\n")
         if cuisine:
             lines.append(f"🍽️ Cuisine: {cuisine}")
         if dishes:
             lines.append(f"🍜 Famous Dishes: {', '.join(dishes)}")
-        if price != "N/A":
+        if price:
             lines.append(f"💰 Price Range: {price}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
-        if address != "Not provided":
-            import urllib.parse
+        if address:
             maps_url = f"https://maps.google.com/?q={urllib.parse.quote(address)}"
             lines.append(f"🗺️ [Open in Google Maps]({maps_url})")
         if hashtags:
@@ -144,34 +116,78 @@ def _format_message(category, info, url, platform):
         return "\n".join(lines)
 
     elif category == "wedding":
+        name = info.get("vendor_name", "Wedding Vendor")
+        address = info.get("address", "")
+        service = info.get("service_type", "")
+        description = info.get("description", "")[:150]
+        price = info.get("price_range", "")
+        highlights = info.get("highlights", [])
+
         lines = ["💒 Wedding\n"]
         lines.append(f"**{name}**\n")
-        if address != "Not provided":
+        if address:
             lines.append(f"📍 {address}\n")
-        lines.append(f"📝 {info.get('description', '')[:150]}")
+        if service:
+            lines.append(f"💍 Service: {service.replace('_', ' ').title()}")
+        if description:
+            lines.append(f"📝 {description}")
+        if price:
+            lines.append(f"💰 Price Range: {price}")
+        if highlights:
+            lines.append("\n✨ Highlights:")
+            for h in highlights[:3]:
+                lines.append(f"- {h}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
         return "\n".join(lines)
 
     elif category == "dates":
+        name = info.get("venue_name", "Date Spot")
+        address = info.get("address", "")
+        activity = info.get("activity_type", "")
+        description = info.get("description", "")[:150]
+        price = info.get("price_range", "")
+        highlights = info.get("highlights", [])
+
         lines = ["💕 Date Ideas\n"]
         lines.append(f"**{name}**\n")
-        if address != "Not provided":
+        if address:
             lines.append(f"📍 {address}\n")
-        lines.append(f"📝 {info.get('description', '')[:150]}")
-        if price != "N/A":
+        if activity:
+            lines.append(f"🎭 Activity: {activity.title()}")
+        if description:
+            lines.append(f"📝 {description}")
+        if price:
             lines.append(f"💰 Price Range: {price}")
+        if highlights:
+            lines.append("\n✨ Highlights:")
+            for h in highlights[:3]:
+                lines.append(f"- {h}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
         return "\n".join(lines)
 
     elif category == "renovation":
+        name = info.get("vendor_name", "Renovation Service")
+        address = info.get("address", "")
+        service = info.get("service_type", "")
+        description = info.get("description", "")[:150]
+        price = info.get("price_range", "")
+        highlights = info.get("highlights", [])
+
         lines = ["🏠 House Renovation\n"]
         lines.append(f"**{name}**\n")
-        if address != "Not provided":
+        if address:
             lines.append(f"📍 {address}\n")
-        lines.append(f"📝 {info.get('description', '')[:150]}")
-        if price != "N/A":
+        if service:
+            lines.append(f"🔧 Service: {service.replace('_', ' ').title()}")
+        if description:
+            lines.append(f"📝 {description}")
+        if price:
             lines.append(f"💰 Price Range: {price}")
+        if highlights:
+            lines.append("\n✨ Highlights:")
+            for h in highlights[:3]:
+                lines.append(f"- {h}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
         return "\n".join(lines)
 
-    return caption[:200]
+    return info.get("description", "")[:200]
