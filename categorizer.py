@@ -1,3 +1,41 @@
+import re
+import json
+import subprocess
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _call_opencode(prompt: str) -> str:
+    """Call OpenCode CLI headlessly."""
+    try:
+        result = subprocess.run(
+            ["opencode", "run", prompt],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+        else:
+            logger.error(f"OpenCode error: {result.stderr}")
+            return ""
+    except Exception as e:
+        logger.error(f"OpenCode subprocess error: {e}")
+        return ""
+
+
+def _extract_json_from_text(text: str) -> dict:
+    """Try to extract JSON from text that may contain other content."""
+    json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group())
+        except json.JSONDecodeError:
+            pass
+    return {}
+
+
 FOOD_KEYWORDS = [
     "restaurant", "cafe", "coffee", "tea", "bar", "pub", "bistro", "diner",
     "noodle", "ramen", "sushi", "pizza", "burger", "taco", "curry",
@@ -23,7 +61,7 @@ DATE_KEYWORDS = [
     "gallery", "cinema", "movie", "concert", "live music", "karaoke",
     "bowling", "ice skating", "hiking", "boat", "cruise", "spa",
     "date night", "couple goals", "together", "romantic dinner",
-    "anniversary", "valentine", "情侣", "约会",
+    "anniversary", "valentine",
 ]
 
 WEDDING_KEYWORDS = [
@@ -51,7 +89,8 @@ FOOD_WEIGHTS = {
 }
 
 
-def categorize(caption, hashtags=None):
+def _keyword_categorize(caption, hashtags=None):
+    """Fallback keyword-based categorization."""
     if not caption:
         return "food"
 
@@ -106,4 +145,31 @@ def categorize(caption, hashtags=None):
     return best
 
 
-import re
+def categorize(caption, hashtags=None):
+    """Categorize caption using OpenCode LLM, with keyword fallback."""
+    if not caption:
+        return "food"
+
+    hashtag_text = " ".join(f"#{h}" for h in (hashtags or []))
+
+    prompt = f"""Categorize this TikTok caption into ONE of these categories:
+- food (restaurants, cafes, dishes, cooking, recipes)
+- dates (date ideas, romantic spots, activities for couples)
+- wedding (wedding services, venues, vendors, bridal)
+- renovation (home renovation, interior design, furniture, contractors)
+
+Caption: {caption}
+Hashtags: {hashtag_text}
+
+Return ONLY a JSON object: {{"category": "one of the categories above"}}"""
+
+    response = _call_opencode(prompt)
+
+    if response:
+        data = _extract_json_from_text(response)
+        if data and data.get("category") in ["food", "dates", "wedding", "renovation"]:
+            logger.info(f"LLM categorized as: {data['category']}")
+            return data["category"]
+
+    logger.warning("LLM categorization failed, using keyword fallback")
+    return _keyword_categorize(caption, hashtags)
