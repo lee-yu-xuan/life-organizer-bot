@@ -36,6 +36,25 @@ RENOVATION_KEYWORDS = [
 ]
 
 
+def extract_location_from_caption(caption):
+    if not caption:
+        return None
+
+    pin_match = re.search(r'📍\s*(.+?)(?:\n|#|$)', caption)
+    if pin_match:
+        return pin_match.group(1).strip()
+
+    at_match = re.search(r'(?:at|@)\s+([A-Z][A-Za-z\s&\'-]+(?:Rd|Road|St|Street|Ave|Avenue|Blvd|Dr|Lane|Way|Pl|Place|Ct|Court|Sq|Square)\b[^,]*(?:,\s*[^,]+)*)', caption)
+    if at_match:
+        return at_match.group(1).strip()
+
+    address_match = re.search(r'(\d+[\w\s]+(?:Rd|Road|St|Street|Ave|Avenue|Blvd|Dr|Lane|Way|Pl|Place|Ct|Court|Sq|Square)[^,]*(?:,\s*[A-Za-z\s]+(?:\d{6})?)?)', caption)
+    if address_match:
+        return address_match.group(1).strip()
+
+    return None
+
+
 def extract_info(caption, hashtags=None):
     if not caption:
         return {}
@@ -43,9 +62,15 @@ def extract_info(caption, hashtags=None):
     doc = nlp(caption)
 
     locations = []
+
+    pin_location = extract_location_from_caption(caption)
+    if pin_location:
+        locations.append(pin_location)
+
     for ent in doc.ents:
         if ent.label_ in ("GPE", "LOC", "FAC"):
-            locations.append(ent.text)
+            if ent.text not in [l for l in locations]:
+                locations.append(ent.text)
 
     price = None
     price_patterns = [
