@@ -1,0 +1,24 @@
+{
+  "agents": {
+    "tiktok-processor": {
+      "path": ".opencode/agents/tiktok-processor.md",
+      "description": "Main agent for TikTok processing"
+    },
+    "food": {
+      "path": ".opencode/agents/food.md",
+      "description": "Food message formatter"
+    },
+    "wedding": {
+      "path": ".opencode/agents/wedding.md",
+      "description": "Wedding message formatter"
+    },
+    "dates": {
+      "path": ".opencode/agents/dates.md",
+      "description": "Date ideas formatter"
+    },
+    "renovation": {
+      "path": ".opencode/agents/renovation.md",
+      "description": "Renovation service formatter"
+    }
+  }
+}

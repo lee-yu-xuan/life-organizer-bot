@@ -2,16 +2,15 @@ import json
 import re
 import subprocess
 import logging
-import urllib.parse
 
 logger = logging.getLogger(__name__)
 
 
-def _call_opencode(prompt: str, timeout: int = 30) -> str:
-    """Call OpenCode CLI headlessly."""
+def _call_opencode(prompt: str, timeout: int = 60) -> str:
+    """Call OpenCode CLI headlessly with tiktok-processor agent."""
     try:
         result = subprocess.run(
-            ["opencode", "run", prompt],
+            ["opencode", "run", "--agent", "tiktok-processor", "--model", "opencode/big-pickle", prompt],
             capture_output=True,
             text=True,
             timeout=timeout
@@ -19,72 +18,57 @@ def _call_opencode(prompt: str, timeout: int = 30) -> str:
         if result.returncode == 0:
             return result.stdout.strip()
         else:
+            logger.error(f"OpenCode error: {result.stderr}")
             return ""
     except Exception as e:
         logger.error(f"OpenCode error: {e}")
         return ""
 
 
-def _extract_json_from_text(text: str) -> dict:
-    """Try to extract JSON from text."""
-    json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
-    if json_match:
-        try:
-            return json.loads(json_match.group())
-        except json.JSONDecodeError:
-            pass
-    return {}
-
-
 def process_link(caption: str, hashtags: list, url: str, platform: str) -> dict:
     """
-    Main agent: categorize using LLM
-    Subagents: format using Python (regex + templates)
+    Main agent: tiktok-processor categorizes and calls subagents to format
     """
     if not caption:
         return {"category": "food", "post_text": "No caption found", "info": {}}
 
     hashtag_text = " ".join(f"#{h}" for h in (hashtags or []))
 
-    # Main agent: categorize
-    prompt = f"""Categorize this TikTok caption. Return ONLY JSON: {{"category": "food/dates/wedding/renovation"}}
+    # Call main agent with the TikTok link
+    prompt = f"""Process this TikTok link. Categorize it and format the message.
 
 Caption: {caption}
-Hashtags: {hashtag_text}"""
+Hashtags: {hashtag_text}
+URL: {url}
+Platform: {platform}
 
-    response = _call_opencode(prompt, timeout=30)
-    category = None
+Return the formatted Telegram message."""
+
+    response = _call_opencode(prompt, timeout=120)
 
     if response:
-        data = _extract_json_from_text(response)
-        if data and data.get("category") in ["food", "dates", "wedding", "renovation"]:
-            category = data["category"]
-            logger.info(f"LLM categorized: {category}")
+        return {"category": "processed", "info": {}, "post_text": response}
 
-    if not category:
-        from categorizer import _keyword_categorize
-        category = _keyword_categorize(caption, hashtags)
+    # Fallback to keyword categorization
+    from categorizer import _keyword_categorize
+    category = _keyword_categorize(caption, hashtags)
 
-    # Subagent: format based on category
-    info = _extract_info(caption, hashtags, category)
-    post_text = _format_message(category, info, url, platform)
-
-    return {"category": category, "info": info, "post_text": post_text}
-
-
-def _extract_info(caption, hashtags, category):
-    """Extract info using regex based on category."""
+    # Extract and format locally
     from extractor import _regex_extract_food, _regex_extract_date, _regex_extract_wedding, _regex_extract_renovation
 
     if category == "food":
-        return _regex_extract_food(caption, hashtags)
+        info = _regex_extract_food(caption, hashtags)
     elif category == "dates":
-        return _regex_extract_date(caption, hashtags)
+        info = _regex_extract_date(caption, hashtags)
     elif category == "wedding":
-        return _regex_extract_wedding(caption, hashtags)
+        info = _regex_extract_wedding(caption, hashtags)
     elif category == "renovation":
-        return _regex_extract_renovation(caption, hashtags)
-    return {"hashtags": hashtags}
+        info = _regex_extract_renovation(caption, hashtags)
+    else:
+        info = {"hashtags": hashtags}
+
+    post_text = _format_message(category, info, url, platform)
+    return {"category": category, "info": info, "post_text": post_text}
 
 
 def _format_message(category, info, url, platform):
@@ -108,9 +92,6 @@ def _format_message(category, info, url, platform):
         if price:
             lines.append(f"💰 Price Range: {price}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
-        if address:
-            maps_url = f"https://maps.google.com/?q={urllib.parse.quote(address)}"
-            lines.append(f"🗺️ [Open in Google Maps]({maps_url})")
         if hashtags:
             lines.append(f"\n{hashtags}")
         return "\n".join(lines)
@@ -121,7 +102,6 @@ def _format_message(category, info, url, platform):
         service = info.get("service_type", "")
         description = info.get("description", "")[:150]
         price = info.get("price_range", "")
-        highlights = info.get("highlights", [])
 
         lines = ["💒 Wedding\n"]
         lines.append(f"**{name}**\n")
@@ -133,10 +113,6 @@ def _format_message(category, info, url, platform):
             lines.append(f"📝 {description}")
         if price:
             lines.append(f"💰 Price Range: {price}")
-        if highlights:
-            lines.append("\n✨ Highlights:")
-            for h in highlights[:3]:
-                lines.append(f"- {h}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
         return "\n".join(lines)
 
@@ -146,7 +122,6 @@ def _format_message(category, info, url, platform):
         activity = info.get("activity_type", "")
         description = info.get("description", "")[:150]
         price = info.get("price_range", "")
-        highlights = info.get("highlights", [])
 
         lines = ["💕 Date Ideas\n"]
         lines.append(f"**{name}**\n")
@@ -158,10 +133,6 @@ def _format_message(category, info, url, platform):
             lines.append(f"📝 {description}")
         if price:
             lines.append(f"💰 Price Range: {price}")
-        if highlights:
-            lines.append("\n✨ Highlights:")
-            for h in highlights[:3]:
-                lines.append(f"- {h}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
         return "\n".join(lines)
 
@@ -171,7 +142,6 @@ def _format_message(category, info, url, platform):
         service = info.get("service_type", "")
         description = info.get("description", "")[:150]
         price = info.get("price_range", "")
-        highlights = info.get("highlights", [])
 
         lines = ["🏠 House Renovation\n"]
         lines.append(f"**{name}**\n")
@@ -183,10 +153,6 @@ def _format_message(category, info, url, platform):
             lines.append(f"📝 {description}")
         if price:
             lines.append(f"💰 Price Range: {price}")
-        if highlights:
-            lines.append("\n✨ Highlights:")
-            for h in highlights[:3]:
-                lines.append(f"- {h}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
         return "\n".join(lines)
 
