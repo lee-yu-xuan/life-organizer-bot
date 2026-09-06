@@ -42,18 +42,37 @@ Fetch the content using oEmbed, categorize it, and call the appropriate subagent
     response = _call_opencode(prompt, timeout=300)
 
     if response and len(response) > 50:
+        # Extract just the formatted message
+        import re
+        
+        # Try to find code block
+        code_match = re.search(r'```\w*\n(.*?)```', response, re.DOTALL)
+        if code_match:
+            post_text = code_match.group(1).strip()
+        else:
+            # Find lines that look like formatted messages (start with emoji)
+            lines = response.split('\n')
+            formatted_lines = []
+            in_message = False
+            for line in lines:
+                if any(line.startswith(e) for e in ['🍔', '💒', '💕', '🏠']):
+                    in_message = True
+                if in_message:
+                    formatted_lines.append(line)
+            post_text = '\n'.join(formatted_lines) if formatted_lines else response
+
         # Extract category from response
         category = "food"
-        if "💒 Wedding" in response or "wedding" in response.lower():
+        if "💒" in post_text:
             category = "wedding"
-        elif "💕 Date" in response or "dates" in response.lower():
+        elif "💕" in post_text:
             category = "dates"
-        elif "🏠 Renovation" in response or "renovation" in response.lower():
+        elif "🏠" in post_text:
             category = "renovation"
-        elif "🍔 Food" in response or "food" in response.lower():
+        elif "🍔" in post_text:
             category = "food"
 
-        return {"category": category, "info": {}, "post_text": response}
+        return {"category": category, "info": {}, "post_text": post_text}
 
     # Fallback: keyword categorization
     from categorizer import _keyword_categorize
