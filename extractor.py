@@ -235,8 +235,10 @@ def extract_date_info(caption, hashtags=None):
 Caption: {caption}
 Hashtags: {hashtag_text}
 
+Activity types: outdoor, indoor, dining, entertainment, adventure, relaxation
+
 Return this exact JSON format:
-{{"venue_name": "name or null", "activity_type": "outdoor/indoor/dining/entertainment or null", "description": "brief description", "price_range": "$$ or null", "address": "address or null", "highlights": ["highlight1", "highlight2"]}}"""
+{{"venue_name": "name or null", "activity_type": "one of the activity types above or null", "description": "brief description", "price_range": "$$ or null", "address": "address or null", "highlights": ["highlight1"]}}"""
 
     response = _call_opencode(prompt)
 
@@ -279,10 +281,12 @@ def _regex_extract_date(caption, hashtags=None):
 
     activity_type = None
     activity_keywords = {
-        "outdoor": ["park", "garden", "hiking", "beach", "lake", "sunset", "scenic", "nature"],
+        "outdoor": ["park", "garden", "hiking", "beach", "lake", "sunset", "scenic", "nature", "outdoor", "view"],
         "indoor": ["museum", "gallery", "cinema", "karaoke", "bowling", "spa", "indoor"],
-        "dining": ["restaurant", "cafe", "rooftop", "bar", "dinner", "brunch"],
-        "entertainment": ["concert", "live music", "movie", "theatre", "show"],
+        "dining": ["restaurant", "cafe", "rooftop", "bar", "dinner", "brunch", "breakfast", "lunch"],
+        "entertainment": ["concert", "live music", "movie", "theatre", "show", "comedy", "magic"],
+        "adventure": ["adventure", "escape room", "climbing", "zip line", "skydiving", "bungee", "kayak", "cycling"],
+        "relaxation": ["spa", "massage", "hot spring", "yoga", "meditation", "wellness"],
     }
     lower_caption = caption.lower()
     for act_type, keywords in activity_keywords.items():
@@ -544,8 +548,10 @@ def extract_renovation_info(caption, hashtags=None):
 Caption: {caption}
 Hashtags: {hashtag_text}
 
+Service types: contractor, interior_design, furniture, kitchen, bathroom, flooring, lighting, painting, plumbing, electrical
+
 Return this exact JSON format:
-{{"vendor_name": "name or null", "service_type": "contractor/interior_design/furniture/kitchen/bathroom/flooring/lighting or null", "description": "brief description", "price_range": "$$ or null", "address": "address or null", "highlights": ["highlight1"]}}"""
+{{"vendor_name": "name or null", "service_type": "one of the service types above or null", "description": "brief description", "price_range": "$$ or null", "address": "address or null", "highlights": ["highlight1"]}}"""
 
     response = _call_opencode(prompt)
 
@@ -588,13 +594,16 @@ def _regex_extract_renovation(caption, hashtags=None):
 
     service_type = None
     service_keywords = {
-        "contractor": ["contractor", "builder", "renovation", "remodel"],
-        "interior_design": ["interior", "design", "decor", "makeover"],
-        "furniture": ["furniture", "sofa", "table", "chair", "cabinet"],
-        "kitchen": ["kitchen", "cabinet", "countertop", "appliance"],
-        "bathroom": ["bathroom", "shower", "toilet", "vanity"],
-        "flooring": ["floor", "tile", "wood", "laminate", "vinyl"],
-        "lighting": ["light", "lighting", "lamp", "chandelier"],
+        "contractor": ["contractor", "builder", "renovation", "remodel", "hdb", "bto"],
+        "interior_design": ["interior", "design", "decor", "makeover", "id"],
+        "furniture": ["furniture", "sofa", "table", "chair", "cabinet", "wardrobe"],
+        "kitchen": ["kitchen", "cabinet", "countertop", "appliance", "stove"],
+        "bathroom": ["bathroom", "shower", "toilet", "vanity", "basin"],
+        "flooring": ["floor", "tile", "wood", "laminate", "vinyl", "parquet"],
+        "lighting": ["light", "lighting", "lamp", "chandelier", "led"],
+        "painting": ["paint", "painting", "wallpaper", "wall paint"],
+        "plumbing": ["plumber", "plumbing", "pipe", "leak", "water heater"],
+        "electrical": ["electrician", "electrical", "wiring", "switch", "socket"],
     }
     lower_caption = caption.lower()
     for svc_type, keywords in service_keywords.items():
