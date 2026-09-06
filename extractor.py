@@ -1,38 +1,37 @@
-import subprocess
 import json
 import os
 import logging
 import re
+import requests
 
 logger = logging.getLogger(__name__)
 
-MODEL = "opencode/big-pickle"
+ZEN_API_URL = "https://opencode.ai/zen/v1/chat/completions"
+MODEL = "big-pickle"
 
 
-def _run_opencode(prompt: str) -> str:
-    """Run OpenCode with the given prompt and return the response."""
-    cmd = [
-        "opencode", "run",
-        "--model", MODEL,
-        prompt
-    ]
+def _call_zen_api(prompt: str) -> str:
+    """Call OpenCode Zen API directly (no CLI needed)."""
+    headers = {
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 1000,
+    }
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
-        if result.returncode != 0:
-            logger.error(f"OpenCode error: {result.stderr}")
-            return ""
-        return result.stdout.strip()
-    except subprocess.TimeoutExpired:
-        logger.error("OpenCode timed out")
-        return ""
+        response = requests.post(ZEN_API_URL, json=payload, headers=headers, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        logger.error(f"OpenCode failed: {e}")
+        logger.error(f"Zen API error: {e}")
         return ""
 
 
@@ -48,7 +47,7 @@ def _extract_json_from_text(text: str) -> dict:
 
 
 def extract_food_info(caption: str, hashtags: list = None) -> dict:
-    """Use OpenCode Big Pickle to extract food info from caption."""
+    """Use OpenCode Zen API to extract food info from caption."""
     if not caption:
         return {}
 
@@ -64,7 +63,7 @@ Hashtags: {hashtag_text}
 Return this exact JSON format:
 {{"restaurant_name": "name or null", "city": "city or null", "cuisine": "cuisine type or null", "famous_dishes": ["dish1"], "price_range": "$$ or null", "address": "address or null"}}"""
 
-    response = _run_opencode(prompt)
+    response = _call_zen_api(prompt)
 
     if not response:
         return {"locations": [], "price": None, "tags": hashtags or [], "subcategory": None}
@@ -72,7 +71,7 @@ Return this exact JSON format:
     data = _extract_json_from_text(response)
 
     if not data:
-        logger.error(f"Failed to parse OpenCode response: {response}")
+        logger.error(f"Failed to parse API response: {response}")
         return {"locations": [], "price": None, "tags": hashtags or [], "subcategory": None}
 
     locations = []
@@ -95,7 +94,7 @@ Return this exact JSON format:
 
 
 def format_food_message(extracted: dict, url: str, platform: str) -> str:
-    """Use OpenCode Big Pickle to format a Telegram message for a food place."""
+    """Use OpenCode Zen API to format a Telegram message for a food place."""
     prompt = f"""Format this restaurant info as a Telegram message. Return ONLY the message text, no other text.
 
 Restaurant: {json.dumps(extracted)}
@@ -120,7 +119,7 @@ Format:
 
 #tags"""
 
-    response = _run_opencode(prompt)
+    response = _call_zen_api(prompt)
 
     if not response:
         return _fallback_format(extracted, url, platform)
@@ -129,7 +128,7 @@ Format:
 
 
 def _fallback_format(extracted: dict, url: str, platform: str) -> str:
-    """Fallback formatting if OpenCode fails."""
+    """Fallback formatting if API fails."""
     name = extracted.get("restaurant_name") or "Unknown Place"
     address = extracted.get("address")
     cuisine = extracted.get("cuisine")
