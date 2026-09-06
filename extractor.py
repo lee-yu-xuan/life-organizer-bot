@@ -224,29 +224,65 @@ def _fallback_format(extracted: dict, url: str, platform: str) -> str:
 
 
 def extract_date_info(caption, hashtags=None):
-    """Extract date idea info from caption."""
+    """Extract date idea info from caption using OpenCode."""
     if not caption:
-        return {"locations": [], "price": None, "tags": hashtags or [], "subcategory": None}
+        return {}
+
+    hashtag_text = " ".join(f"#{h}" for h in (hashtags or []))
+
+    prompt = f"""Extract date idea info from this caption. Return ONLY valid JSON.
+
+Caption: {caption}
+Hashtags: {hashtag_text}
+
+Return this exact JSON format:
+{{"venue_name": "name or null", "activity_type": "outdoor/indoor/dining/entertainment or null", "description": "brief description", "price_range": "$$ or null", "address": "address or null", "highlights": ["highlight1", "highlight2"]}}"""
+
+    response = _call_opencode(prompt)
+
+    if not response:
+        return _regex_extract_date(caption, hashtags)
+
+    data = _extract_json_from_text(response)
+    if not data:
+        return _regex_extract_date(caption, hashtags)
 
     locations = []
-    price = None
+    if data.get("address"):
+        locations.append(data["address"])
+    elif data.get("venue_name"):
+        locations.append(data["venue_name"])
 
-    price_patterns = [
-        r'\$\$+', r'cheap', r'affordable', r'budget', r'expensive',
-        r'pricey', r'luxury', r'mid-range', r'free',
-    ]
-    for pattern in price_patterns:
-        match = re.search(pattern, caption, re.IGNORECASE)
-        if match:
-            price = match.group(0)
-            break
+    return {
+        "locations": locations,
+        "price": data.get("price_range"),
+        "tags": hashtags or [],
+        "subcategory": data.get("activity_type"),
+        "venue_name": data.get("venue_name"),
+        "description": data.get("description"),
+        "highlights": data.get("highlights", []),
+        "address": data.get("address"),
+    }
+
+
+def _regex_extract_date(caption, hashtags=None):
+    """Fallback regex extraction for date ideas."""
+    locations = []
+    address_match = re.search(r'(\d+[\w\s,]+(?:Singapore|SG|KL|Kuala Lumpur))', caption, re.IGNORECASE)
+    if address_match:
+        locations.append(address_match.group(1).strip())
+
+    price = None
+    price_match = re.search(r'(\${1,4})', caption)
+    if price_match:
+        price = price_match.group(1)
 
     activity_type = None
     activity_keywords = {
-        "outdoor": ["park", "garden", "hiking", "beach", "lake", "sunset", "scenic"],
-        "indoor": ["museum", "gallery", "cinema", "karaoke", "bowling", "spa"],
-        "dining": ["restaurant", "cafe", "rooftop", "bar", "dinner"],
-        "entertainment": ["concert", "live music", "movie", "theatre"],
+        "outdoor": ["park", "garden", "hiking", "beach", "lake", "sunset", "scenic", "nature"],
+        "indoor": ["museum", "gallery", "cinema", "karaoke", "bowling", "spa", "indoor"],
+        "dining": ["restaurant", "cafe", "rooftop", "bar", "dinner", "brunch"],
+        "entertainment": ["concert", "live music", "movie", "theatre", "show"],
     }
     lower_caption = caption.lower()
     for act_type, keywords in activity_keywords.items():
@@ -262,34 +298,143 @@ def extract_date_info(caption, hashtags=None):
         "price": price,
         "tags": hashtags or [],
         "subcategory": activity_type,
+        "venue_name": None,
+        "description": caption[:200] if caption else None,
+        "highlights": [],
+        "address": locations[0] if locations else None,
     }
 
 
+def format_date_message(extracted, url, platform):
+    """Format a Telegram message for a date idea."""
+    prompt = f"""Format this date idea as a Telegram message. Return ONLY the message text.
+
+Date Idea: {json.dumps(extracted)}
+URL: {url}
+
+Format:
+💕 Date Ideas
+
+**venue name**
+
+📍 address
+
+🎭 Activity: type
+📝 Description
+
+💰 Price Range: price
+
+✨ Highlights:
+- highlight1
+- highlight2
+
+🔗 [View on TikTok](url)
+
+🗺️ [Open in Google Maps](maps_url)"""
+
+    response = _call_opencode(prompt)
+    if response:
+        return response
+
+    # Fallback formatting
+    name = extracted.get("venue_name") or "Date Spot"
+    address = extracted.get("address")
+    activity = extracted.get("subcategory")
+    description = extracted.get("description")
+    price = extracted.get("price")
+    highlights = extracted.get("highlights", [])
+
+    lines = ["💕 Date Ideas\n"]
+    lines.append(f"**{name}**\n")
+
+    if address:
+        lines.append(f"📍 {address}\n")
+
+    if activity:
+        lines.append(f"🎭 Activity: {activity.title()}")
+
+    if description:
+        lines.append(f"📝 {description}\n")
+
+    if price:
+        lines.append(f"💰 Price Range: {price}")
+
+    if highlights:
+        lines.append("\n✨ Highlights:")
+        for h in highlights[:3]:
+            lines.append(f"- {h}")
+
+    lines.append(f"\n🔗 [View on TikTok]({url})")
+
+    if address:
+        import urllib.parse
+        maps_url = f"https://maps.google.com/?q={urllib.parse.quote(address)}"
+        lines.append(f"🗺️ [Open in Google Maps]({maps_url})")
+
+    return "\n".join(lines)
+
+
 def extract_wedding_info(caption, hashtags=None):
-    """Extract wedding info from caption."""
+    """Extract wedding info from caption using OpenCode."""
     if not caption:
-        return {"locations": [], "price": None, "tags": hashtags or [], "subcategory": None}
+        return {}
+
+    hashtag_text = " ".join(f"#{h}" for h in (hashtags or []))
+
+    prompt = f"""Extract wedding service info from this caption. Return ONLY valid JSON.
+
+Caption: {caption}
+Hashtags: {hashtag_text}
+
+Return this exact JSON format:
+{{"vendor_name": "name or null", "service_type": "venue/dress/decoration/photography/catering or null", "description": "brief description", "price_range": "$$ or null", "address": "address or null", "highlights": ["highlight1"]}}"""
+
+    response = _call_opencode(prompt)
+
+    if not response:
+        return _regex_extract_wedding(caption, hashtags)
+
+    data = _extract_json_from_text(response)
+    if not data:
+        return _regex_extract_wedding(caption, hashtags)
 
     locations = []
-    price = None
+    if data.get("address"):
+        locations.append(data["address"])
+    elif data.get("vendor_name"):
+        locations.append(data["vendor_name"])
 
-    price_patterns = [
-        r'\$\$+', r'cheap', r'affordable', r'budget', r'expensive',
-        r'pricey', r'luxury', r'mid-range', r'free',
-    ]
-    for pattern in price_patterns:
-        match = re.search(pattern, caption, re.IGNORECASE)
-        if match:
-            price = match.group(0)
-            break
+    return {
+        "locations": locations,
+        "price": data.get("price_range"),
+        "tags": hashtags or [],
+        "subcategory": data.get("service_type"),
+        "vendor_name": data.get("vendor_name"),
+        "description": data.get("description"),
+        "highlights": data.get("highlights", []),
+        "address": data.get("address"),
+    }
+
+
+def _regex_extract_wedding(caption, hashtags=None):
+    """Fallback regex extraction for wedding services."""
+    locations = []
+    address_match = re.search(r'(\d+[\w\s,]+(?:Singapore|SG|KL|Kuala Lumpur))', caption, re.IGNORECASE)
+    if address_match:
+        locations.append(address_match.group(1).strip())
+
+    price = None
+    price_match = re.search(r'(\${1,4})', caption)
+    if price_match:
+        price = price_match.group(1)
 
     service_type = None
     service_keywords = {
-        "venue": ["venue", "banquet", "hall", "garden", "chapel"],
-        "dress": ["dress", "gown", "suit", "attire"],
-        "decoration": ["decoration", "florist", "bouquet", "flower"],
-        "photography": ["photographer", "videographer", "photo", "video"],
-        "catering": ["catering", "food", "menu", "buffet"],
+        "venue": ["venue", "banquet", "hall", "garden", "chapel", "wedding"],
+        "dress": ["dress", "gown", "suit", "attire", "bride"],
+        "decoration": ["decoration", "florist", "bouquet", "flower", "floral"],
+        "photography": ["photographer", "videographer", "photo", "video", "album"],
+        "catering": ["catering", "food", "menu", "buffet", "cake"],
     }
     lower_caption = caption.lower()
     for svc_type, keywords in service_keywords.items():
@@ -305,26 +450,134 @@ def extract_wedding_info(caption, hashtags=None):
         "price": price,
         "tags": hashtags or [],
         "subcategory": service_type,
+        "vendor_name": None,
+        "description": caption[:200] if caption else None,
+        "highlights": [],
+        "address": locations[0] if locations else None,
     }
 
 
+def format_wedding_message(extracted, url, platform):
+    """Format a Telegram message for a wedding service."""
+    prompt = f"""Format this wedding service as a Telegram message. Return ONLY the message text.
+
+Wedding Service: {json.dumps(extracted)}
+URL: {url}
+
+Format:
+💒 Wedding
+
+**vendor name**
+
+📍 address
+
+💍 Service: type
+📝 Description
+
+💰 Price Range: price
+
+✨ Highlights:
+- highlight1
+
+🔗 [View on TikTok](url)
+
+🗺️ [Open in Google Maps](maps_url)"""
+
+    response = _call_opencode(prompt)
+    if response:
+        return response
+
+    # Fallback formatting
+    name = extracted.get("vendor_name") or "Wedding Vendor"
+    address = extracted.get("address")
+    service = extracted.get("subcategory")
+    description = extracted.get("description")
+    price = extracted.get("price")
+    highlights = extracted.get("highlights", [])
+
+    lines = ["💒 Wedding\n"]
+    lines.append(f"**{name}**\n")
+
+    if address:
+        lines.append(f"📍 {address}\n")
+
+    if service:
+        lines.append(f"💍 Service: {service.title()}")
+
+    if description:
+        lines.append(f"📝 {description}\n")
+
+    if price:
+        lines.append(f"💰 Price Range: {price}")
+
+    if highlights:
+        lines.append("\n✨ Highlights:")
+        for h in highlights[:3]:
+            lines.append(f"- {h}")
+
+    lines.append(f"\n🔗 [View on TikTok]({url})")
+
+    if address:
+        import urllib.parse
+        maps_url = f"https://maps.google.com/?q={urllib.parse.quote(address)}"
+        lines.append(f"🗺️ [Open in Google Maps]({maps_url})")
+
+    return "\n".join(lines)
+
+
 def extract_renovation_info(caption, hashtags=None):
-    """Extract renovation info from caption."""
+    """Extract renovation info from caption using OpenCode."""
     if not caption:
-        return {"locations": [], "price": None, "tags": hashtags or [], "subcategory": None}
+        return {}
+
+    hashtag_text = " ".join(f"#{h}" for h in (hashtags or []))
+
+    prompt = f"""Extract home renovation info from this caption. Return ONLY valid JSON.
+
+Caption: {caption}
+Hashtags: {hashtag_text}
+
+Return this exact JSON format:
+{{"vendor_name": "name or null", "service_type": "contractor/interior_design/furniture/kitchen/bathroom/flooring/lighting or null", "description": "brief description", "price_range": "$$ or null", "address": "address or null", "highlights": ["highlight1"]}}"""
+
+    response = _call_opencode(prompt)
+
+    if not response:
+        return _regex_extract_renovation(caption, hashtags)
+
+    data = _extract_json_from_text(response)
+    if not data:
+        return _regex_extract_renovation(caption, hashtags)
 
     locations = []
-    price = None
+    if data.get("address"):
+        locations.append(data["address"])
+    elif data.get("vendor_name"):
+        locations.append(data["vendor_name"])
 
-    price_patterns = [
-        r'\$\$+', r'cheap', r'affordable', r'budget', r'expensive',
-        r'pricey', r'luxury', r'mid-range', r'free',
-    ]
-    for pattern in price_patterns:
-        match = re.search(pattern, caption, re.IGNORECASE)
-        if match:
-            price = match.group(0)
-            break
+    return {
+        "locations": locations,
+        "price": data.get("price_range"),
+        "tags": hashtags or [],
+        "subcategory": data.get("service_type"),
+        "vendor_name": data.get("vendor_name"),
+        "description": data.get("description"),
+        "highlights": data.get("highlights", []),
+        "address": data.get("address"),
+    }
+
+
+def _regex_extract_renovation(caption, hashtags=None):
+    """Fallback regex extraction for renovation services."""
+    locations = []
+    address_match = re.search(r'(\d+[\w\s,]+(?:Singapore|SG|KL|Kuala Lumpur))', caption, re.IGNORECASE)
+    if address_match:
+        locations.append(address_match.group(1).strip())
+
+    price = None
+    price_match = re.search(r'(\${1,4})', caption)
+    if price_match:
+        price = price_match.group(1)
 
     service_type = None
     service_keywords = {
@@ -350,4 +603,69 @@ def extract_renovation_info(caption, hashtags=None):
         "price": price,
         "tags": hashtags or [],
         "subcategory": service_type,
+        "vendor_name": None,
+        "description": caption[:200] if caption else None,
+        "highlights": [],
+        "address": locations[0] if locations else None,
     }
+
+
+def format_renovation_message(extracted, url, platform):
+    """Format a Telegram message for a renovation service."""
+    prompt = f"""Format this renovation service as a Telegram message. Return ONLY the message text.
+
+Renovation Service: {json.dumps(extracted)}
+URL: {url}
+
+Format:
+🏠 House Renovation
+
+**vendor name**
+
+📍 address
+
+🔧 Service: type
+📝 Description
+
+💰 Price Range: price
+
+✨ Highlights:
+- highlight1
+
+🔗 [View on TikTok](url)"""
+
+    response = _call_opencode(prompt)
+    if response:
+        return response
+
+    # Fallback formatting
+    name = extracted.get("vendor_name") or "Renovation Service"
+    address = extracted.get("address")
+    service = extracted.get("subcategory")
+    description = extracted.get("description")
+    price = extracted.get("price")
+    highlights = extracted.get("highlights", [])
+
+    lines = ["🏠 House Renovation\n"]
+    lines.append(f"**{name}**\n")
+
+    if address:
+        lines.append(f"📍 {address}\n")
+
+    if service:
+        lines.append(f"🔧 Service: {service.title()}")
+
+    if description:
+        lines.append(f"📝 {description}\n")
+
+    if price:
+        lines.append(f"💰 Price Range: {price}")
+
+    if highlights:
+        lines.append("\n✨ Highlights:")
+        for h in highlights[:3]:
+            lines.append(f"- {h}")
+
+    lines.append(f"\n🔗 [View on TikTok]({url})")
+
+    return "\n".join(lines)
