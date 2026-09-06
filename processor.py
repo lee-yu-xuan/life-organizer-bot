@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def _call_opencode(prompt: str, timeout: int = 90) -> str:
+def _call_opencode(prompt: str, timeout: int = 60) -> str:
     """Call OpenCode CLI headlessly."""
     try:
         result = subprocess.run(
@@ -38,8 +38,8 @@ def _extract_json_from_text(text: str) -> dict:
 
 def process_link(caption: str, hashtags: list, url: str, platform: str) -> dict:
     """
-    Single OpenCode call to:
-    1. Categorize the caption
+    Process a TikTok link:
+    1. Categorize using LLM
     2. Extract info based on category
     3. Format the Telegram message
     """
@@ -52,125 +52,34 @@ def process_link(caption: str, hashtags: list, url: str, platform: str) -> dict:
 
     hashtag_text = " ".join(f"#{h}" for h in (hashtags or []))
 
-    prompt = f"""You are a social media content processor. Process this TikTok link and return a JSON object.
+    # Try LLM categorization first
+    prompt = f"""Categorize this TikTok caption into ONE category: food, dates, wedding, or renovation.
 
 Caption: {caption}
 Hashtags: {hashtag_text}
-URL: {url}
-Platform: {platform}
 
-STEP 1: Categorize into ONE of these:
-- food (restaurants, cafes, dishes, cooking)
-- dates (date ideas, romantic spots, couples activities)
-- wedding (wedding services, venues, vendors, bridal)
-- renovation (home renovation, interior design, furniture)
+Return ONLY: {{"category": "..."}}"""
 
-STEP 2: Extract info based on category:
-
-For food: extract restaurant_name, cuisine, famous_dishes, price_range, address
-For dates: extract venue_name, activity_type, description, price_range, address, highlights
-For wedding: extract vendor_name, service_type, description, price_range, address, highlights
-For renovation: extract vendor_name, service_type, description, price_range, address, highlights
-
-STEP 3: Format a Telegram message based on category.
-
-Food format:
-🍔 Food Places
-
-**restaurant_name**
-
-📍 address
-
-🍽️ Cuisine: cuisine
-🍜 Famous Dishes: dishes
-
-💰 Price Range: price
-
-🔗 [View on TikTok](url)
-
-🗺️ [Open in Google Maps](maps_url)
-
-#tags
-
-Date format:
-💕 Date Ideas
-
-**venue_name**
-
-📍 address
-
-🎭 Activity: type
-📝 description
-
-💰 Price Range: price
-
-✨ Highlights:
-- highlight
-
-🔗 [View on TikTok](url)
-
-🗺️ [Open in Google Maps](maps_url)
-
-Wedding format:
-💒 Wedding
-
-**vendor_name**
-
-📍 address
-
-💍 Service: type
-📝 description
-
-💰 Price Range: price
-
-✨ Highlights:
-- highlight
-
-🔗 [View on TikTok](url)
-
-🗺️ [Open in Google Maps](maps_url)
-
-Renovation format:
-🏠 House Renovation
-
-**vendor_name**
-
-📍 address
-
-🔧 Service: type
-📝 description
-
-💰 Price Range: price
-
-✨ Highlights:
-- highlight
-
-🔗 [View on TikTok](url)
-
-Return ONLY a JSON object with these fields:
-{{"category": "food/dates/wedding/renovation", "info": {{extracted fields}}, "post_text": "formatted telegram message"}}"""
-
-    response = _call_opencode(prompt, timeout=90)
+    response = _call_opencode(prompt, timeout=30)
+    category = None
 
     if response:
         data = _extract_json_from_text(response)
-        if data and data.get("category") and data.get("post_text"):
-            logger.info(f"Processed as: {data['category']}")
-            return data
+        if data and data.get("category") in ["food", "dates", "wedding", "renovation"]:
+            category = data["category"]
+            logger.info(f"LLM categorized as: {category}")
 
-    logger.warning("LLM processing failed, using fallback")
-    return _fallback_process(caption, hashtags, url, platform)
+    # Fallback to keyword categorization
+    if not category:
+        from categorizer import _keyword_categorize
+        category = _keyword_categorize(caption, hashtags)
+        logger.info(f"Keyword categorized as: {category}")
 
-
-def _fallback_process(caption, hashtags, url, platform):
-    """Fallback processing using keyword matching."""
-    from categorizer import _keyword_categorize
+    # Extract and format based on category
     from extractor import (
         extract_food_info, extract_date_info, extract_wedding_info, extract_renovation_info,
         format_food_message, format_date_message, format_wedding_message, format_renovation_message
     )
-
-    category = _keyword_categorize(caption, hashtags)
 
     if category == "food":
         info = extract_food_info(caption, hashtags)
