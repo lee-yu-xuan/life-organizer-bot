@@ -14,8 +14,7 @@ def _call_opencode(prompt: str) -> str:
             ["opencode", "run", prompt],
             capture_output=True,
             text=True,
-            timeout=60,
-            cwd="/home/yx"
+            timeout=60
         )
         if result.returncode == 0:
             return result.stdout.strip()
