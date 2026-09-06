@@ -85,7 +85,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         post_text = result.stdout.strip()
         
         # Extract just the formatted message
-        import re
         code_match = re.search(r'```\w*\n(.*?)```', post_text, re.DOTALL)
         if code_match:
             post_text = code_match.group(1).strip()
