@@ -58,28 +58,42 @@ def extract_instagram(url):
         return None
 
 
-def extract_tiktok(url):
+def resolve_tiktok_url(url):
+    import requests
     try:
-        import yt_dlp
+        resp = requests.get(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }, allow_redirects=True, timeout=10)
+        return resp.url
+    except Exception:
+        return url
 
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'skip_download': True,
-        }
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+def extract_tiktok(url):
+    import requests
+    try:
+        resolved_url = resolve_tiktok_url(url)
 
-        description = info.get('description', '') or ''
-        hashtags = re.findall(r'#(\w+)', description)
-        title = info.get('title', '') or info.get('fulltitle', '')
+        oembed_url = f"https://www.tiktok.com/oembed?url={resolved_url}"
+        resp = requests.get(oembed_url, timeout=10)
+
+        if resp.status_code != 200:
+            print(f"TikTok oEmbed failed: {resp.status_code}")
+            return None
+
+        data = resp.json()
+        title = data.get("title", "")
+        author_name = data.get("author_name", "")
+        author_url = data.get("author_url", "")
+
+        caption = title
+        hashtags = re.findall(r'#(\w+)', caption)
 
         return {
-            "caption": description,
+            "caption": caption,
             "hashtags": hashtags,
-            "title": title,
-            "uploader": info.get('uploader', ''),
+            "title": author_name,
+            "uploader": author_name,
             "location_name": None,
             "location_lat": None,
             "location_lon": None,
