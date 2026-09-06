@@ -56,8 +56,10 @@ def categorize(caption, hashtags=None):
         return "food"
 
     text = caption.lower()
+    hashtag_text = ""
     if hashtags:
-        text += " " + " ".join(h.lower() for h in hashtags)
+        hashtag_text = " ".join(h.lower() for h in hashtags)
+        text += " " + hashtag_text
 
     scores = {
         "food": 0,
@@ -68,19 +70,27 @@ def categorize(caption, hashtags=None):
 
     for kw in FOOD_KEYWORDS:
         weight = FOOD_WEIGHTS.get(kw, 1)
-        if kw in text:
+        if re.search(r'\b' + re.escape(kw) + r'\b', text):
+            scores["food"] += weight
+        elif hashtag_text and kw in hashtag_text:
             scores["food"] += weight
 
     for kw in DATE_KEYWORDS:
-        if kw in text:
+        if re.search(r'\b' + re.escape(kw) + r'\b', text):
+            scores["dates"] += 2
+        elif hashtag_text and kw in hashtag_text:
             scores["dates"] += 2
 
     for kw in WEDDING_KEYWORDS:
-        if kw in text:
+        if re.search(r'\b' + re.escape(kw) + r'\b', text):
+            scores["wedding"] += 2
+        elif hashtag_text and kw in hashtag_text:
             scores["wedding"] += 2
 
     for kw in RENOVATION_KEYWORDS:
-        if kw in text:
+        if re.search(r'\b' + re.escape(kw) + r'\b', text):
+            scores["renovation"] += 2
+        elif hashtag_text and kw in hashtag_text:
             scores["renovation"] += 2
 
     if "📍" in caption:
