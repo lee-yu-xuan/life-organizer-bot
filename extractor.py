@@ -165,3 +165,133 @@ def _fallback_format(extracted: dict, url: str, platform: str) -> str:
         lines.append(f"\n{' '.join(f'#{t}' for t in tags)}")
 
     return "\n".join(lines)
+
+
+def extract_date_info(caption, hashtags=None):
+    """Extract date idea info from caption."""
+    if not caption:
+        return {"locations": [], "price": None, "tags": hashtags or [], "subcategory": None}
+
+    locations = []
+    price = None
+
+    price_patterns = [
+        r'\$\$+', r'cheap', r'affordable', r'budget', r'expensive',
+        r'pricey', r'luxury', r'mid-range', r'free',
+    ]
+    for pattern in price_patterns:
+        match = re.search(pattern, caption, re.IGNORECASE)
+        if match:
+            price = match.group(0)
+            break
+
+    activity_type = None
+    activity_keywords = {
+        "outdoor": ["park", "garden", "hiking", "beach", "lake", "sunset", "scenic"],
+        "indoor": ["museum", "gallery", "cinema", "karaoke", "bowling", "spa"],
+        "dining": ["restaurant", "cafe", "rooftop", "bar", "dinner"],
+        "entertainment": ["concert", "live music", "movie", "theatre"],
+    }
+    lower_caption = caption.lower()
+    for act_type, keywords in activity_keywords.items():
+        for kw in keywords:
+            if kw in lower_caption:
+                activity_type = act_type
+                break
+        if activity_type:
+            break
+
+    return {
+        "locations": locations,
+        "price": price,
+        "tags": hashtags or [],
+        "subcategory": activity_type,
+    }
+
+
+def extract_wedding_info(caption, hashtags=None):
+    """Extract wedding info from caption."""
+    if not caption:
+        return {"locations": [], "price": None, "tags": hashtags or [], "subcategory": None}
+
+    locations = []
+    price = None
+
+    price_patterns = [
+        r'\$\$+', r'cheap', r'affordable', r'budget', r'expensive',
+        r'pricey', r'luxury', r'mid-range', r'free',
+    ]
+    for pattern in price_patterns:
+        match = re.search(pattern, caption, re.IGNORECASE)
+        if match:
+            price = match.group(0)
+            break
+
+    service_type = None
+    service_keywords = {
+        "venue": ["venue", "banquet", "hall", "garden", "chapel"],
+        "dress": ["dress", "gown", "suit", "attire"],
+        "decoration": ["decoration", "florist", "bouquet", "flower"],
+        "photography": ["photographer", "videographer", "photo", "video"],
+        "catering": ["catering", "food", "menu", "buffet"],
+    }
+    lower_caption = caption.lower()
+    for svc_type, keywords in service_keywords.items():
+        for kw in keywords:
+            if kw in lower_caption:
+                service_type = svc_type
+                break
+        if service_type:
+            break
+
+    return {
+        "locations": locations,
+        "price": price,
+        "tags": hashtags or [],
+        "subcategory": service_type,
+    }
+
+
+def extract_renovation_info(caption, hashtags=None):
+    """Extract renovation info from caption."""
+    if not caption:
+        return {"locations": [], "price": None, "tags": hashtags or [], "subcategory": None}
+
+    locations = []
+    price = None
+
+    price_patterns = [
+        r'\$\$+', r'cheap', r'affordable', r'budget', r'expensive',
+        r'pricey', r'luxury', r'mid-range', r'free',
+    ]
+    for pattern in price_patterns:
+        match = re.search(pattern, caption, re.IGNORECASE)
+        if match:
+            price = match.group(0)
+            break
+
+    service_type = None
+    service_keywords = {
+        "contractor": ["contractor", "builder", "renovation", "remodel"],
+        "interior_design": ["interior", "design", "decor", "makeover"],
+        "furniture": ["furniture", "sofa", "table", "chair", "cabinet"],
+        "kitchen": ["kitchen", "cabinet", "countertop", "appliance"],
+        "bathroom": ["bathroom", "shower", "toilet", "vanity"],
+        "flooring": ["floor", "tile", "wood", "laminate", "vinyl"],
+        "lighting": ["light", "lighting", "lamp", "chandelier"],
+    }
+    lower_caption = caption.lower()
+    for svc_type, keywords in service_keywords.items():
+        for kw in keywords:
+            if kw in lower_caption:
+                service_type = svc_type
+                break
+        if service_type:
+            break
+
+    return {
+        "locations": locations,
+        "price": price,
+        "tags": hashtags or [],
+        "subcategory": service_type,
+    }
