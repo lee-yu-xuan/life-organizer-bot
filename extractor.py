@@ -46,6 +46,70 @@ def _extract_json_from_text(text: str) -> dict:
     return {}
 
 
+def _regex_extract_food(caption: str, hashtags: list = None) -> dict:
+    """Regex-based fallback extraction when API is unavailable."""
+    if not caption:
+        return {"locations": [], "price": None, "tags": hashtags or [], "subcategory": None}
+
+    restaurant_name = None
+    name_match = re.search(r'([A-Z][\w\s]+?)(?:\s+at\s+|\s*,)', caption)
+    if name_match:
+        restaurant_name = name_match.group(1).strip()
+
+    address = None
+    address_match = re.search(r'(\d+[\w\s,]+(?:Singapore|SG|S\d{6}|Malaysia|KL|Penang|Jakarta|Bali|Bangkok|Tokyo|Seoul))', caption, re.IGNORECASE)
+    if address_match:
+        address = address_match.group(1).strip()
+
+    city = None
+    if address:
+        city_match = re.search(r'(Singapore|KL|Kuala Lumpur|Penang|Jakarta|Bali|Bangkok|Tokyo|Seoul)', address, re.IGNORECASE)
+        if city_match:
+            city = city_match.group(1)
+
+    cuisine = None
+    cuisines = ['Japanese', 'Chinese', 'Korean', 'Thai', 'Vietnamese', 'Italian', 'French', 'Indian', 'Mexican', 'American', 'Fusion', 'Peranakan', 'Nyonya', 'Hainanese', 'Cantonese', 'Hokkien', 'Teochew']
+    for c in cuisines:
+        if c.lower() in caption.lower():
+            cuisine = c
+            break
+
+    price = None
+    price_match = re.search(r'(\${1,4})', caption)
+    if price_match:
+        price = price_match.group(1)
+    else:
+        price_keywords = {'cheap': '$', 'budget': '$', 'affordable': '$', 'mid-range': '$$', 'expensive': '$$$', 'luxury': '$$$', 'fine dining': '$$$$'}
+        for kw, p in price_keywords.items():
+            if kw in caption.lower():
+                price = p
+                break
+
+    famous_dishes = []
+    dish_keywords = ['ramen', 'sushi', 'tempura', 'udon', 'soba', 'curry', 'donburi', 'katsu', 'gyoza', 'takoyaki', 'pad thai', 'pho', 'biryani', 'pizza', 'pasta', 'steak', 'burger', 'tacos', 'burrito']
+    for dish in dish_keywords:
+        if dish in caption.lower():
+            famous_dishes.append(dish.title())
+
+    locations = []
+    if address:
+        locations.append(address)
+    elif restaurant_name and city:
+        locations.append(f"{restaurant_name}, {city}")
+
+    return {
+        "locations": locations,
+        "price": price,
+        "tags": hashtags or [],
+        "subcategory": cuisine,
+        "restaurant_name": restaurant_name,
+        "cuisine": cuisine,
+        "famous_dishes": famous_dishes,
+        "address": address,
+        "city": city,
+    }
+
+
 def extract_food_info(caption: str, hashtags: list = None) -> dict:
     """Use OpenCode Zen API to extract food info from caption."""
     if not caption:
@@ -66,13 +130,14 @@ Return this exact JSON format:
     response = _call_zen_api(prompt)
 
     if not response:
-        return {"locations": [], "price": None, "tags": hashtags or [], "subcategory": None}
+        logger.warning("API failed, using regex fallback")
+        return _regex_extract_food(caption, hashtags)
 
     data = _extract_json_from_text(response)
 
     if not data:
         logger.error(f"Failed to parse API response: {response}")
-        return {"locations": [], "price": None, "tags": hashtags or [], "subcategory": None}
+        return _regex_extract_food(caption, hashtags)
 
     locations = []
     if data.get("address"):
@@ -122,6 +187,7 @@ Format:
     response = _call_zen_api(prompt)
 
     if not response:
+        logger.warning("API formatting failed, using Python fallback")
         return _fallback_format(extracted, url, platform)
 
     return response

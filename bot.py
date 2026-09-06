@@ -80,6 +80,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if category == "food":
             info = extract_food_info(caption, hashtags)
             post_text = format_food_message(info, url, platform)
+            if not info.get("restaurant_name") and not info.get("address"):
+                logger.warning("Food extraction returned no data, using caption as title")
+                title = title or caption[:100] if caption else ""
         elif category == "dates":
             info = extract_date_info(caption, hashtags)
         elif category == "wedding":
@@ -147,6 +150,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if tags:
                 tag_str = " ".join(f"#{t}" for t in tags[:10])
+                post_text += f"\n{tag_str}"
+            elif hashtags:
+                tag_str = " ".join(f"#{h.lower()}" for h in hashtags[:10])
                 post_text += f"\n{tag_str}"
 
         bot = context.bot
