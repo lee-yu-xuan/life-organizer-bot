@@ -7,8 +7,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from config import BOT_TOKEN, CHANNEL_ID, TOPICS
 from database import init_db, save_place, search_places, get_places_by_category, get_all_places
 from scraper import scrape_url, detect_platform, INSTAGRAM_PATTERN, TIKTOK_PATTERN, YOUTUBE_PATTERN
-from extractor import extract_food_info, extract_date_info, extract_wedding_info, extract_renovation_info, format_food_message, format_date_message, format_wedding_message, format_renovation_message
-from categorizer import categorize
+from processor import process_link
 from geocoder import geocode_location, format_maps_url, format_maps_link_text
 
 logging.basicConfig(level=logging.INFO)
@@ -32,7 +31,7 @@ CATEGORY_EMOJIS = {
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Welcome to Life Organizer Bot!\n\n"
-        "Send me an Instagram Reel or TikTok link and I'll:\n"
+        "Send me a TikTok link and I'll:\n"
         "1. Extract the place info\n"
         "2. Auto-categorize it\n"
         "3. Pin the location on a map\n"
@@ -79,23 +78,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption = data.get("caption", "")
         hashtags = data.get("hashtags", [])
 
-        category = categorize(caption, hashtags)
-
-        if category == "food":
-            info = extract_food_info(caption, hashtags)
-            post_text = format_food_message(info, url, platform)
-        elif category == "dates":
-            info = extract_date_info(caption, hashtags)
-            post_text = format_date_message(info, url, platform)
-        elif category == "wedding":
-            info = extract_wedding_info(caption, hashtags)
-            post_text = format_wedding_message(info, url, platform)
-        elif category == "renovation":
-            info = extract_renovation_info(caption, hashtags)
-            post_text = format_renovation_message(info, url, platform)
-        else:
-            info = {"locations": [], "price": None, "tags": [], "subcategory": None}
-            post_text = None
+        result = process_link(caption, hashtags, url, platform)
+        category = result.get("category", "food")
+        post_text = result.get("post_text", "")
+        info = result.get("info", {})
 
         title = data.get("title") or data.get("username") or ""
         location_name = data.get("location_name") or (info.get("locations", [None])[0] if info.get("locations") else None)
