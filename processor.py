@@ -29,13 +29,26 @@ def process_link(caption: str, hashtags: list, url: str, platform: str) -> dict:
     """
     Main agent: tiktok-processor categorizes and calls subagents to format
     """
-    if not caption:
-        return {"category": "food", "post_text": "No caption found", "info": {}}
+    if not caption and not url:
+        return {"category": "food", "post_text": "No content found", "info": {}}
 
-    hashtag_text = " ".join(f"#{h}" for h in (hashtags or []))
+    # Try URL-first approach
+    if url:
+        prompt = f"""Process this TikTok link.
 
-    # Call main agent with the TikTok link
-    prompt = f"""Process this TikTok link. Categorize it and format the message.
+URL: {url}
+Platform: {platform}
+
+Fetch the content, categorize it, and format the Telegram message."""
+
+        response = _call_opencode(prompt, timeout=300)
+        if response and len(response) > 100:
+            return {"category": "processed", "info": {}, "post_text": response}
+
+    # Fallback: use caption data with OpenCode
+    if caption:
+        hashtag_text = " ".join(f"#{h}" for h in (hashtags or []))
+        prompt = f"""Categorize this TikTok content and format the message.
 
 Caption: {caption}
 Hashtags: {hashtag_text}
@@ -44,30 +57,28 @@ Platform: {platform}
 
 Return the formatted Telegram message."""
 
-    response = _call_opencode(prompt, timeout=120)
+        response = _call_opencode(prompt, timeout=300)
+        if response:
+            return {"category": "processed", "info": {}, "post_text": response}
 
-    if response:
-        return {"category": "processed", "info": {}, "post_text": response}
-
-    # Fallback to keyword categorization
+    # Final fallback: keyword categorization
     from categorizer import _keyword_categorize
-    category = _keyword_categorize(caption, hashtags)
+    category = _keyword_categorize(caption or "", hashtags or [])
 
-    # Extract and format locally
     from extractor import _regex_extract_food, _regex_extract_date, _regex_extract_wedding, _regex_extract_renovation
 
     if category == "food":
-        info = _regex_extract_food(caption, hashtags)
+        info = _regex_extract_food(caption or "", hashtags or [])
     elif category == "dates":
-        info = _regex_extract_date(caption, hashtags)
+        info = _regex_extract_date(caption or "", hashtags or [])
     elif category == "wedding":
-        info = _regex_extract_wedding(caption, hashtags)
+        info = _regex_extract_wedding(caption or "", hashtags or [])
     elif category == "renovation":
-        info = _regex_extract_renovation(caption, hashtags)
+        info = _regex_extract_renovation(caption or "", hashtags or [])
     else:
-        info = {"hashtags": hashtags}
+        info = {"hashtags": hashtags or []}
 
-    post_text = _format_message(category, info, url, platform)
+    post_text = _format_message(category, info, url or "", platform)
     return {"category": category, "info": info, "post_text": post_text}
 
 
