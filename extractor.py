@@ -386,8 +386,10 @@ def extract_wedding_info(caption, hashtags=None):
 Caption: {caption}
 Hashtags: {hashtag_text}
 
+Service types: venue, photography, videography, decoration, wedding_favors, live_station, catering, dress, emcee, music
+
 Return this exact JSON format:
-{{"vendor_name": "name or null", "service_type": "venue/dress/decoration/photography/catering or null", "description": "brief description", "price_range": "$$ or null", "address": "address or null", "highlights": ["highlight1"]}}"""
+{{"vendor_name": "name or null", "service_type": "one of the service types above or null", "description": "brief description", "price_range": "$$ or null", "address": "address or null", "highlights": ["highlight1"]}}"""
 
     response = _call_opencode(prompt)
 
@@ -430,11 +432,16 @@ def _regex_extract_wedding(caption, hashtags=None):
 
     service_type = None
     service_keywords = {
-        "venue": ["venue", "banquet", "hall", "garden", "chapel", "wedding"],
-        "dress": ["dress", "gown", "suit", "attire", "bride"],
-        "decoration": ["decoration", "florist", "bouquet", "flower", "floral"],
-        "photography": ["photographer", "videographer", "photo", "video", "album"],
-        "catering": ["catering", "food", "menu", "buffet", "cake"],
+        "venue": ["venue", "banquet", "hall", "garden", "chapel"],
+        "photography": ["photographer", "photo", "album", "photoshoot"],
+        "videography": ["videographer", "video", "film", "highlight reel"],
+        "decoration": ["decoration", "florist", "bouquet", "flower", "floral", "floral arrangement"],
+        "wedding_favors": ["favour", "favor", "gift", "souvenir", "door gift", "wedding favour"],
+        "live_station": ["live station", "livestation", "interactive", "keychain", "customisation", "customisation station"],
+        "catering": ["catering", "food", "menu", "buffet", "cake", "wedding cake"],
+        "dress": ["dress", "gown", "suit", "attire", "bride", "wedding dress"],
+        "emcee": ["emcee", "mc", "host", "master of ceremony"],
+        "music": ["band", "music", "dj", "singer", "live band"],
     }
     lower_caption = caption.lower()
     for svc_type, keywords in service_keywords.items():
