@@ -99,19 +99,56 @@ def extract_food_info(caption, hashtags=None):
     info = extract_info(caption, hashtags)
 
     cuisine = None
-    cuisine_keywords = [
-        "japanese", "chinese", "korean", "thai", "vietnamese", "indian",
-        "italian", "french", "mexican", "american", "mediterranean",
-        "ramen", "sushi", "pizza", "pasta", "curry", "nasi", "mee",
-        "dim sum", "bbq", "hotpot", "teppanyaki", "izakaya",
-    ]
+    cuisine_keywords = {
+        "japanese": ["japanese", "japan", "sushi", "ramen", "udon", "soba", "tempura", "yakitori", "tonkatsu", "izakaya", "teppanyaki", "yakiniku", "omakase", "kaiseki", "tsukemen"],
+        "chinese": ["chinese", "china", "dim sum", "bak kut teh", "hainanese", "cantonese", "sichuan", "hokkien", "hakka"],
+        "korean": ["korean", "korea", "bibimbap", "tteokbokki", "kimbap", "samgyeopsal", "jjigae", "banchan"],
+        "thai": ["thai", "thailand", "pad thai", "tom yum", "green curry", "mango sticky rice"],
+        "vietnamese": ["vietnamese", "vietnam", "pho", "banh mi", "bun", "goi cuon"],
+        "indian": ["indian", "india", "naan", "tandoori", "biryani", "masala", "curry"],
+        "italian": ["italian", "italy", "pasta", "risotto", "lasagna", "gnocchi", "tiramisu", "pizza"],
+        "french": ["french", "france", "croissant", "baguette", "crepe", "souffle"],
+        "mexican": ["mexican", "mexico", "tacos", "burrito", "quesadilla", "nachos", "guacamole"],
+        "american": ["american", "usa", "burger", "steak", "bbq", "wings"],
+        "mediterranean": ["mediterranean", "greek", "falafel", "hummus", "kebab"],
+        "singaporean": ["singapore", "singaporean", "nasi lemak", "laksa", "char kway teow", "roti prata", "satay", "bak kut teh", "hokkien mee"],
+        "malaysian": ["malaysian", "malaysia", "nasi lemak", "roti canai", "nasi goreng", "rendang"],
+        "indonesian": ["indonesian", "indonesia", "nasi goreng", "satay", "rendang", "ayam penyet", "gado-gado"],
+    }
     lower_caption = caption.lower() if caption else ""
-    for c in cuisine_keywords:
-        if c in lower_caption:
-            cuisine = c
+    for cuisine_name, keywords in cuisine_keywords.items():
+        for kw in keywords:
+            if kw in lower_caption:
+                cuisine = cuisine_name
+                break
+        if cuisine:
             break
 
-    info["subcategory"] = cuisine
+    restaurant_type = None
+    type_keywords = {
+        "ramen shop": ["ramen", "tsukemen", "noodle shop"],
+        "sushi bar": ["sushi", "sashimi", "omakase"],
+        "izakaya": ["izakaya", "japanese bar"],
+        "cafe": ["cafe", "coffee shop", "coffee", "latte", "cappuccino"],
+        "bakery": ["bakery", "croissant", "pastry", "bread"],
+        "dessert shop": ["dessert", "ice cream", "cake", "waffle", "matcha"],
+        "fine dining": ["fine dining", "michelin", "gourmet", "tasting menu"],
+        "street food": ["street food", "hawker", "food stall", "food court"],
+        "fast food": ["fast food", "drive thru", "takeaway"],
+        "buffet": ["buffet", "all you can eat", "unlimited"],
+        "bar": ["bar", "pub", "cocktail", "whiskey", "beer"],
+        "bbq": ["bbq", "barbecue", "grill", "smokehouse"],
+    }
+    for rest_type, keywords in type_keywords.items():
+        for kw in keywords:
+            if kw in lower_caption:
+                restaurant_type = rest_type
+                break
+        if restaurant_type:
+            break
+
+    info["subcategory"] = cuisine or restaurant_type
+    info["restaurant_type"] = restaurant_type
     return info
 
 
