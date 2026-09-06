@@ -6,8 +6,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def _call_opencode(prompt: str, timeout: int = 60) -> str:
-    """Call OpenCode CLI headlessly with tiktok-processor agent."""
+def _call_opencode(prompt: str, timeout: int = 300) -> str:
+    """Call OpenCode CLI with tiktok-processor agent."""
     try:
         result = subprocess.run(
             ["opencode", "run", "--agent", "tiktok-processor", "--model", "opencode/big-pickle", prompt],
@@ -27,41 +27,35 @@ def _call_opencode(prompt: str, timeout: int = 60) -> str:
 
 def process_link(caption: str, hashtags: list, url: str, platform: str) -> dict:
     """
-    Main agent: tiktok-processor categorizes and calls subagents to format
+    Main agent: tiktok-processor fetches content, categorizes, calls subagents
     """
-    if not caption and not url:
-        return {"category": "food", "post_text": "No content found", "info": {}}
+    if not url:
+        return {"category": "food", "post_text": "No URL provided", "info": {}}
 
-    # Try URL-first approach
-    if url:
-        prompt = f"""Process this TikTok link.
+    # Call main agent with the TikTok URL
+    prompt = f"""Process this TikTok link.
 
 URL: {url}
-Platform: {platform}
 
-Fetch the content, categorize it, and format the Telegram message."""
+Fetch the content using oEmbed, categorize it, and call the appropriate subagent to format the message."""
 
-        response = _call_opencode(prompt, timeout=300)
-        if response and len(response) > 100:
-            return {"category": "processed", "info": {}, "post_text": response}
+    response = _call_opencode(prompt, timeout=300)
 
-    # Fallback: use caption data with OpenCode
-    if caption:
-        hashtag_text = " ".join(f"#{h}" for h in (hashtags or []))
-        prompt = f"""Categorize this TikTok content and format the message.
+    if response and len(response) > 50:
+        # Extract category from response
+        category = "food"
+        if "💒 Wedding" in response or "wedding" in response.lower():
+            category = "wedding"
+        elif "💕 Date" in response or "dates" in response.lower():
+            category = "dates"
+        elif "🏠 Renovation" in response or "renovation" in response.lower():
+            category = "renovation"
+        elif "🍔 Food" in response or "food" in response.lower():
+            category = "food"
 
-Caption: {caption}
-Hashtags: {hashtag_text}
-URL: {url}
-Platform: {platform}
+        return {"category": category, "info": {}, "post_text": response}
 
-Return the formatted Telegram message."""
-
-        response = _call_opencode(prompt, timeout=300)
-        if response:
-            return {"category": "processed", "info": {}, "post_text": response}
-
-    # Final fallback: keyword categorization
+    # Fallback: keyword categorization
     from categorizer import _keyword_categorize
     category = _keyword_categorize(caption or "", hashtags or [])
 
@@ -78,92 +72,61 @@ Return the formatted Telegram message."""
     else:
         info = {"hashtags": hashtags or []}
 
-    post_text = _format_message(category, info, url or "", platform)
+    post_text = _format_message(category, info, url, platform)
     return {"category": category, "info": info, "post_text": post_text}
 
 
 def _format_message(category, info, url, platform):
-    """Format Telegram message based on category."""
+    """Format Telegram message based on category (fallback)."""
     if category == "food":
         name = info.get("restaurant_name", "Unknown Place")
-        address = info.get("address", "")
+        address = info.get("address", "Singapore")
         cuisine = info.get("cuisine", "")
         dishes = info.get("famous_dishes", [])
-        price = info.get("price_range", "")
-        hashtags = " ".join(f"#{h}" for h in info.get("hashtags", []))
 
         lines = ["🍔 Food Places\n"]
         lines.append(f"**{name}**\n")
-        if address:
-            lines.append(f"📍 {address}\n")
+        lines.append(f"📍 {address}\n")
         if cuisine:
             lines.append(f"🍽️ Cuisine: {cuisine}")
         if dishes:
             lines.append(f"🍜 Famous Dishes: {', '.join(dishes)}")
-        if price:
-            lines.append(f"💰 Price Range: {price}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
-        if hashtags:
-            lines.append(f"\n{hashtags}")
         return "\n".join(lines)
 
     elif category == "wedding":
         name = info.get("vendor_name", "Wedding Vendor")
-        address = info.get("address", "")
         service = info.get("service_type", "")
-        description = info.get("description", "")[:150]
-        price = info.get("price_range", "")
 
         lines = ["💒 Wedding\n"]
         lines.append(f"**{name}**\n")
-        if address:
-            lines.append(f"📍 {address}\n")
+        lines.append(f"📍 Singapore\n")
         if service:
             lines.append(f"💍 Service: {service.replace('_', ' ').title()}")
-        if description:
-            lines.append(f"📝 {description}")
-        if price:
-            lines.append(f"💰 Price Range: {price}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
         return "\n".join(lines)
 
     elif category == "dates":
         name = info.get("venue_name", "Date Spot")
-        address = info.get("address", "")
         activity = info.get("activity_type", "")
-        description = info.get("description", "")[:150]
-        price = info.get("price_range", "")
 
         lines = ["💕 Date Ideas\n"]
         lines.append(f"**{name}**\n")
-        if address:
-            lines.append(f"📍 {address}\n")
+        lines.append(f"📍 Singapore\n")
         if activity:
             lines.append(f"🎭 Activity: {activity.title()}")
-        if description:
-            lines.append(f"📝 {description}")
-        if price:
-            lines.append(f"💰 Price Range: {price}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
         return "\n".join(lines)
 
     elif category == "renovation":
         name = info.get("vendor_name", "Renovation Service")
-        address = info.get("address", "")
         service = info.get("service_type", "")
-        description = info.get("description", "")[:150]
-        price = info.get("price_range", "")
 
         lines = ["🏠 House Renovation\n"]
         lines.append(f"**{name}**\n")
-        if address:
-            lines.append(f"📍 {address}\n")
+        lines.append(f"📍 Singapore\n")
         if service:
             lines.append(f"🔧 Service: {service.replace('_', ' ').title()}")
-        if description:
-            lines.append(f"📝 {description}")
-        if price:
-            lines.append(f"💰 Price Range: {price}")
         lines.append(f"\n🔗 [View on {platform.title()}]({url})")
         return "\n".join(lines)
 
