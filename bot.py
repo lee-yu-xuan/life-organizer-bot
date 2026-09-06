@@ -61,7 +61,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     platform = detect_platform(url)
 
     if not platform:
-        await update.message.reply_text("❌ Unsupported link. Please send an Instagram or TikTok link.")
+        await update.message.reply_text("❌ Unsupported link. Please send a TikTok link.")
+        return
+
+    if platform == "instagram":
+        await update.message.reply_text("❌ Instagram is not supported yet. Please send a TikTok link.")
         return
 
     status_msg = await update.message.reply_text(f"⏳ Processing {platform.title()} link...")
