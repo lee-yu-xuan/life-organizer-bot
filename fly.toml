@@ -1,0 +1,11 @@
+app = 'life-organizer-bot'
+primary_region = 'sin'
+
+[build]
+
+[env]
+  DATABASE_PATH = '/data/food_places.db'
+
+[mounts]
+  source = 'data'
+  destination = '/data'
