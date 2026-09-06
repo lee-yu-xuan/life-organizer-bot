@@ -1,6 +1,9 @@
 import os
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8948364460:AAGXEs9tdGVv0WfEsEIBX6YRkf--AF-JCoc")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN environment variable is required")
+
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1004400076187"))
 
 TOPICS = {
