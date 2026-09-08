@@ -75,7 +75,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ["opencode", "run", "--agent", "tiktok-processor", "--model", "opencode/big-pickle", f"Process this TikTok link: {url}"],
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=1800,
             cwd="/app"
         )
         
