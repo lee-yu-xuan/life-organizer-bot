@@ -71,20 +71,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         # Call OpenCode agent directly with the URL
-        result = subprocess.run(
-            ["opencode", "run", "--agent", "tiktok-processor", "--model", "opencode/big-pickle", f"Process this TikTok link: {url}"],
-            capture_output=True,
+        proc = subprocess.Popen(
+            ["opencode", "run", "--agent", "tiktok-processor", "--model", "opencode/big-pickle",
+             "--format", "json", f"Process this TikTok link: {url}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=1800,
             cwd="/app"
         )
         
-        if result.returncode != 0:
-            error_msg = result.stderr[-500:] if result.stderr else "No error details"
-            await status_msg.edit_text(f"❌ Error: {error_msg}")
+        try:
+            stdout, stderr = proc.communicate(timeout=120)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, stderr = proc.communicate()
+            await status_msg.edit_text("❌ Timeout processing link.")
             return
         
-        post_text = result.stdout.strip()
+        if proc.returncode != 0:
+            await status_msg.edit_text(f"❌ Error: {stderr[-500:]}")
+            return
+        
+        # Parse JSON output to get the formatted message
+        import json as json_mod
+        post_text = ""
+        for line in stdout.strip().split('\n'):
+            try:
+                event = json_mod.loads(line)
+                if event.get("type") == "text":
+                    post_text = event.get("part", {}).get("text", "")
+            except:
+                pass
+        
+        if not post_text:
+            post_text = stdout.strip()
         
         # Extract just the formatted message
         code_match = re.search(r'```\w*\n(.*?)```', post_text, re.DOTALL)
