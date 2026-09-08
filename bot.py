@@ -75,14 +75,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ["opencode", "run", "--agent", "tiktok-processor", "--model", "opencode/big-pickle", f"Process this TikTok link: {url}"],
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=120,
             cwd="/app"
         )
         
         if result.returncode != 0:
             error_msg = result.stderr[-500:] if result.stderr else "No error details"
-            logger.error(f"OpenCode failed: {error_msg}")
-            await status_msg.edit_text(f"❌ Failed to process link.")
+            await status_msg.edit_text(f"❌ Error: {error_msg}")
             return
         
         post_text = result.stdout.strip()
